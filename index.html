@@ -1,0 +1,990 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PotatoCheckIn</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #f6f8fa;
+      --surface: #ffffff;
+      --border: #d0d7de;
+      --text: #1f2328;
+      --text-muted: #656d76;
+      --primary: #1a7f37;
+      --primary-hover: #116329;
+      --danger: #d1242f;
+      --danger-hover: #a40e26;
+      --blue: #0969da;
+      --purple: #8250df;
+      --h0: #ebedf0;
+      --h1: #9be9a8;
+      --h2: #40c463;
+      --h3: #30a14e;
+      --h4: #216e39;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ── Overlays ── */
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.45);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+
+    .modal {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 32px;
+      width: 100%;
+      max-width: 440px;
+      margin: 16px;
+    }
+
+    .modal h2 { font-size: 20px; margin-bottom: 6px; }
+    .modal > p { color: var(--text-muted); font-size: 14px; margin-bottom: 24px; }
+
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+    .form-group input {
+      width: 100%; padding: 8px 12px;
+      border: 1px solid var(--border); border-radius: 6px;
+      font-size: 14px; outline: none; color: var(--text);
+    }
+    .form-group input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(9,105,218,0.2); }
+    .form-group small { display: block; margin-top: 5px; font-size: 12px; color: var(--text-muted); }
+    .form-group small a { color: var(--blue); }
+
+    .error-msg { color: var(--danger); font-size: 13px; margin-bottom: 12px; display: none; }
+
+    /* ── Header ── */
+    .header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 56px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .logo {
+      font-weight: 700; font-size: 16px; color: var(--text);
+      display: flex; align-items: center; gap: 8px;
+      text-decoration: none;
+    }
+
+    .nav { display: flex; gap: 2px; }
+    .nav-btn {
+      padding: 6px 16px; border-radius: 6px; border: none;
+      background: transparent; cursor: pointer;
+      font-size: 14px; font-weight: 500; color: var(--text-muted);
+      transition: background 0.15s, color 0.15s;
+    }
+    .nav-btn:hover { background: var(--bg); color: var(--text); }
+    .nav-btn.active { background: var(--bg); color: var(--text); font-weight: 600; }
+
+    .header-right { display: flex; align-items: center; gap: 12px; }
+
+    .sync-indicator { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-muted); }
+    .sync-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--primary); flex-shrink: 0; }
+    .sync-dot.syncing { background: #d4a72c; animation: pulse 1s infinite; }
+    .sync-dot.error   { background: var(--danger); }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
+
+    .icon-btn {
+      padding: 5px 10px; border: 1px solid var(--border); border-radius: 6px;
+      background: transparent; cursor: pointer; font-size: 13px; color: var(--text-muted);
+    }
+    .icon-btn:hover { background: var(--bg); }
+
+    /* ── Main layout ── */
+    .main { max-width: 860px; margin: 0 auto; padding: 32px 24px; }
+
+    /* ── User toggle ── */
+    .user-toggle {
+      display: flex; gap: 0;
+      background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+      padding: 3px; width: fit-content; margin-bottom: 28px;
+    }
+    .user-btn {
+      padding: 7px 22px; border: none; border-radius: 6px;
+      background: transparent; cursor: pointer;
+      font-size: 14px; font-weight: 500; color: var(--text-muted);
+      transition: all 0.15s;
+    }
+    .user-btn.active {
+      background: var(--surface); color: var(--text);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    /* ── Check-in card ── */
+    .checkin-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+      padding: 44px 40px; text-align: center; margin-bottom: 24px;
+    }
+
+    .status-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em;
+      color: var(--text-muted); margin-bottom: 14px;
+    }
+    .status-badge .badge-dot {
+      width: 7px; height: 7px; border-radius: 50%; background: var(--text-muted);
+    }
+    .status-badge.active { color: var(--primary); }
+    .status-badge.active .badge-dot { background: var(--primary); animation: pulse 1.5s infinite; }
+
+    .timer {
+      font-size: 60px; font-weight: 700;
+      font-variant-numeric: tabular-nums; letter-spacing: -2px;
+      color: var(--text); margin-bottom: 6px; line-height: 1;
+    }
+    .timer.active { color: var(--primary); }
+
+    .today-total { font-size: 14px; color: var(--text-muted); margin-bottom: 36px; }
+
+    .checkin-btn {
+      padding: 13px 52px; border: none; border-radius: 8px;
+      font-size: 16px; font-weight: 600; cursor: pointer;
+      transition: all 0.15s; letter-spacing: 0.01em;
+    }
+    .checkin-btn.start { background: var(--primary); color: white; }
+    .checkin-btn.start:hover { background: var(--primary-hover); }
+    .checkin-btn.stop  { background: var(--danger); color: white; }
+    .checkin-btn.stop:hover  { background: var(--danger-hover); }
+
+    /* ── Sessions table ── */
+    .section-title {
+      font-size: 12px; font-weight: 600; color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px;
+    }
+
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; overflow: hidden;
+    }
+
+    .session-row {
+      display: flex; align-items: center;
+      padding: 11px 16px; border-bottom: 1px solid var(--border); font-size: 14px;
+    }
+    .session-row:last-child { border-bottom: none; }
+
+    .session-num {
+      width: 26px; height: 26px; border-radius: 50%;
+      background: var(--bg); display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 600; color: var(--text-muted);
+      margin-right: 14px; flex-shrink: 0;
+    }
+
+    .session-times { flex: 1; }
+    .session-start  { font-weight: 500; }
+    .session-sep    { color: var(--text-muted); margin: 0 6px; }
+    .session-end    { color: var(--text-muted); }
+    .session-end.live { color: var(--primary); font-weight: 500; }
+    .session-dur    { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+    .empty-state {
+      padding: 36px; text-align: center;
+      font-size: 14px; color: var(--text-muted);
+    }
+
+    /* ── Dashboard ── */
+    .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 28px; }
+
+    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px; }
+
+    .stat-card-header {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 15px; font-weight: 700; margin-bottom: 16px;
+    }
+
+    .user-pill {
+      font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 20px;
+      color: white;
+    }
+    .user-pill.thomas { background: var(--primary); }
+    .user-pill.kastri { background: var(--purple); }
+
+    .stats-row { display: flex; gap: 0; }
+    .stat-item { flex: 1; padding: 0 4px; }
+    .stat-item + .stat-item { border-left: 1px solid var(--border); padding-left: 16px; }
+    .stat-val  { font-size: 20px; font-weight: 700; color: var(--text); }
+    .stat-lbl  { font-size: 11px; color: var(--text-muted); margin-top: 3px; text-transform: uppercase; letter-spacing: 0.04em; }
+
+    /* ── Heatmap ── */
+    .heatmap-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px; margin-bottom: 12px; }
+    .heatmap-title {
+      font-size: 13px; font-weight: 600; margin-bottom: 14px;
+      display: flex; align-items: center; gap: 8px;
+    }
+
+    .heatmap-scroll { overflow-x: auto; padding-bottom: 4px; }
+    .heatmap-inner { display: inline-flex; flex-direction: column; gap: 2px; }
+
+    .heatmap-months { display: flex; gap: 2px; height: 16px; margin-bottom: 2px; }
+    .heatmap-month-label { font-size: 10px; color: var(--text-muted); line-height: 16px; }
+
+    .heatmap-body { display: flex; gap: 2px; }
+
+    .heatmap-col { display: flex; flex-direction: column; gap: 2px; }
+
+    .hm-cell {
+      width: 11px; height: 11px; border-radius: 2px;
+      background: var(--h0); cursor: default; flex-shrink: 0;
+    }
+    .hm-cell[data-l="1"] { background: var(--h1); }
+    .hm-cell[data-l="2"] { background: var(--h2); }
+    .hm-cell[data-l="3"] { background: var(--h3); }
+    .hm-cell[data-l="4"] { background: var(--h4); }
+    .hm-cell.future     { background: transparent; }
+
+    .heatmap-footer { display: flex; align-items: center; gap: 4px; margin-top: 8px; font-size: 11px; color: var(--text-muted); }
+    .hm-leg { width: 11px; height: 11px; border-radius: 2px; display: inline-block; }
+
+    /* ── Bar chart ── */
+    .chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px; margin-bottom: 12px; }
+    .chart-title { font-size: 13px; font-weight: 600; margin-bottom: 16px; }
+
+    .bar-chart { display: flex; align-items: flex-end; gap: 3px; height: 110px; }
+    .bar-group  { flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; }
+    .bars       { display: flex; gap: 2px; align-items: flex-end; flex: 1; width: 100%; justify-content: center; }
+    .bar        { width: 9px; border-radius: 2px 2px 0 0; min-height: 2px; }
+    .bar.thomas { background: var(--primary); }
+    .bar.kastri { background: var(--purple); }
+    .bar-lbl    { font-size: 9px; color: var(--text-muted); margin-top: 3px; white-space: nowrap; }
+
+    .chart-legend { display: flex; gap: 14px; margin-top: 10px; font-size: 12px; color: var(--text-muted); }
+    .chart-legend span { display: flex; align-items: center; gap: 5px; }
+    .leg-dot { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+
+    /* ── Recent table ── */
+    .recent-row {
+      display: flex; align-items: center;
+      padding: 9px 16px; border-bottom: 1px solid var(--border); font-size: 13px;
+    }
+    .recent-row:last-child { border-bottom: none; }
+    .rec-user  { font-weight: 700; width: 72px; flex-shrink: 0; }
+    .rec-user.thomas { color: var(--primary); }
+    .rec-user.kastri { color: var(--purple); }
+    .rec-date  { color: var(--text-muted); width: 88px; flex-shrink: 0; }
+    .rec-time  { flex: 1; color: var(--text); }
+    .rec-dur   { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+    /* ── Buttons ── */
+    .btn {
+      padding: 8px 16px; border-radius: 6px; border: 1px solid var(--border);
+      background: var(--surface); cursor: pointer; font-size: 14px; font-weight: 500; color: var(--text);
+    }
+    .btn:hover { background: var(--bg); }
+    .btn-primary { background: var(--primary); border-color: var(--primary); color: white; }
+    .btn-primary:hover { background: var(--primary-hover); }
+    .btn-danger { color: var(--danger); border-color: var(--danger); }
+    .btn-danger:hover { background: #fff0f0; }
+
+    /* ── Toast ── */
+    .toast {
+      position: fixed; bottom: 24px; right: 24px;
+      background: #1f2328; color: white;
+      padding: 11px 18px; border-radius: 8px; font-size: 14px;
+      transform: translateY(80px); transition: transform 0.25s ease;
+      z-index: 200; pointer-events: none;
+    }
+    .toast.show   { transform: translateY(0); }
+    .toast.error  { background: var(--danger); }
+
+    /* ── Utils ── */
+    .hidden { display: none !important; }
+    .flex-row { display: flex; gap: 10px; }
+
+    /* ── Responsive ── */
+    @media (max-width: 600px) {
+      .stats-grid { grid-template-columns: 1fr; }
+      .header { padding: 0 16px; }
+      .main   { padding: 20px 14px; }
+      .checkin-card { padding: 32px 20px; }
+      .timer  { font-size: 44px; }
+      .stat-val { font-size: 18px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════ SETUP OVERLAY ═══════════════ -->
+<div class="overlay" id="setupOverlay">
+  <div class="modal">
+    <h2>🥔 PotatoCheckIn Setup</h2>
+    <p>Connect a GitHub Gist to store check-in data persistently across devices.</p>
+
+    <div class="form-group">
+      <label>GitHub Personal Access Token</label>
+      <input type="password" id="patInput" placeholder="ghp_..." autocomplete="off">
+      <small>Needs the <strong>gist</strong> scope.
+        <a href="https://github.com/settings/tokens/new?scopes=gist&description=PotatoCheckIn" target="_blank" rel="noopener">Create one here →</a>
+      </small>
+    </div>
+
+    <div class="form-group">
+      <label>
+        Gist ID
+        <span style="font-weight:400; color:var(--text-muted)"> (optional — leave empty to create a new Gist)</span>
+      </label>
+      <input type="text" id="gistIdInput" placeholder="Paste existing Gist ID to sync another device">
+    </div>
+
+    <div class="error-msg" id="setupError"></div>
+    <button class="btn btn-primary" id="setupBtn" style="width:100%; padding:10px;">Connect</button>
+  </div>
+</div>
+
+<!-- ═══════════════ SETTINGS OVERLAY ═══════════════ -->
+<div class="overlay hidden" id="settingsOverlay">
+  <div class="modal">
+    <h2>Settings</h2>
+    <p style="margin-bottom:8px;">Gist ID (share this + a PAT to sync another device):</p>
+    <code id="displayGistId" style="display:block; background:var(--bg); padding:8px 10px; border-radius:6px; font-size:13px; word-break:break-all; margin-bottom:20px; border:1px solid var(--border);"></code>
+    <div class="flex-row">
+      <button class="btn btn-primary" id="closeSettingsBtn">Done</button>
+      <button class="btn btn-danger" id="disconnectBtn">Disconnect</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ HEADER ═══════════════ -->
+<header class="header">
+  <div class="logo">🥔 PotatoCheckIn</div>
+  <nav class="nav">
+    <button class="nav-btn active" id="navCheckin"   onclick="switchView('checkin')">Check-in</button>
+    <button class="nav-btn"        id="navDashboard" onclick="switchView('dashboard')">Dashboard</button>
+  </nav>
+  <div class="header-right">
+    <div class="sync-indicator">
+      <div class="sync-dot" id="syncDot"></div>
+      <span id="syncLabel">Synced</span>
+    </div>
+    <button class="icon-btn" id="settingsBtn">⚙️ Settings</button>
+  </div>
+</header>
+
+<!-- ═══════════════ APP ═══════════════ -->
+<main class="main" id="mainApp">
+
+  <!-- CHECK-IN VIEW -->
+  <div id="checkinView">
+
+    <div class="user-toggle">
+      <button class="user-btn active" id="uBtnThomas" onclick="switchUser('thomas')">Thomas</button>
+      <button class="user-btn"        id="uBtnKastri" onclick="switchUser('kastri')">Kastri</button>
+    </div>
+
+    <div class="checkin-card">
+      <div class="status-badge" id="statusBadge">
+        <div class="badge-dot"></div>
+        <span id="statusText">Not checked in</span>
+      </div>
+      <div class="timer" id="timer">00:00:00</div>
+      <div class="today-total" id="todayTotal">Today: 0m</div>
+      <button class="checkin-btn start" id="mainBtn" onclick="handleMainBtn()">Start</button>
+    </div>
+
+    <p class="section-title">Today’s Sessions</p>
+    <div class="card" id="sessionsTable"><div class="empty-state">No sessions yet today</div></div>
+
+  </div>
+
+  <!-- DASHBOARD VIEW -->
+  <div id="dashboardView" class="hidden">
+    <div class="stats-grid" id="statsGrid"></div>
+
+    <p class="section-title">Activity Heatmap</p>
+    <div id="heatmapThomas"></div>
+    <div id="heatmapKastri"></div>
+
+    <p class="section-title" style="margin-top:24px;">Last 14 Days</p>
+    <div class="chart-card">
+      <div class="chart-title">Hours worked per day</div>
+      <div class="bar-chart" id="barChart"></div>
+      <div class="chart-legend">
+        <span><em class="leg-dot" style="background:var(--primary)"></em> Thomas</span>
+        <span><em class="leg-dot" style="background:var(--purple)"></em> Kastri</span>
+      </div>
+    </div>
+
+    <p class="section-title" style="margin-top:24px;">Recent Check-ins</p>
+    <div class="card" id="recentTable"></div>
+  </div>
+
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ════════════════════════════════════════════════════════════════════
+//  State
+// ════════════════════════════════════════════════════════════════════
+let appData = { thomas: {}, kastri: {} };
+let currentUser = 'thomas';
+let currentView = 'checkin';
+let timerInterval  = null;
+let isSyncing = false;
+const USERS = ['thomas', 'kastri'];
+const GIST_FILE = 'potatocheckin.json';
+
+// ════════════════════════════════════════════════════════════════════
+//  Utilities
+// ════════════════════════════════════════════════════════════════════
+const getPat    = () => localStorage.getItem('pat')    || '';
+const getGistId = () => localStorage.getItem('gistId') || '';
+
+function localDateKey(d = new Date()) {
+  const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+
+function fmtTime(d)  { return d.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' }); }
+function fmtDate(d)  { return d.toLocaleDateString([], { month:'short', day:'numeric' }); }
+
+function minsToHM(mins) {
+  if (!mins || mins < 0) return '0m';
+  const h = Math.floor(mins / 60), m = Math.round(mins % 60);
+  if (h === 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
+  return `${h}h\xA0${m}m`;
+}
+
+function fmtHHMMSS(startISO) {
+  const secs = Math.max(0, Math.floor((Date.now() - new Date(startISO)) / 1000));
+  const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60), s = secs % 60;
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+
+function dayTotalMins(user, key) {
+  const sessions = (appData[user] || {})[key] || [];
+  return sessions.reduce((sum, s) => {
+    const start = new Date(s.start), end = s.end ? new Date(s.end) : new Date();
+    return sum + (end - start) / 60000;
+  }, 0);
+}
+
+function openSession(user) {
+  const sessions = (appData[user] || {})[localDateKey()] || [];
+  return sessions.find(s => !s.end) || null;
+}
+
+function toast(msg, isErr = false) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast show' + (isErr ? ' error' : '');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.className = 'toast'; }, 3200);
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Sync indicator
+// ════════════════════════════════════════════════════════════════════
+function setSyncState(state) {
+  const dot = document.getElementById('syncDot');
+  const lbl = document.getElementById('syncLabel');
+  dot.className = 'sync-dot' + (state === 'syncing' ? ' syncing' : state === 'error' ? ' error' : '');
+  lbl.textContent = state === 'syncing' ? 'Syncing…' : state === 'error' ? 'Error' : 'Synced';
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  GitHub Gist API
+// ════════════════════════════════════════════════════════════════════
+async function gistGet() {
+  const r = await fetch(`https://api.github.com/gists/${getGistId()}`, {
+    headers: { Authorization: `Bearer ${getPat()}`, Accept: 'application/vnd.github+json' }
+  });
+  if (!r.ok) throw new Error(`Could not load Gist (HTTP ${r.status})`);
+  const json = await r.json();
+  const content = json.files[GIST_FILE]?.content;
+  if (!content) throw new Error('potatocheckin.json not found in Gist');
+  return JSON.parse(content);
+}
+
+async function gistPatch() {
+  const r = await fetch(`https://api.github.com/gists/${getGistId()}`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${getPat()}`, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ files: { [GIST_FILE]: { content: JSON.stringify(appData, null, 2) } } })
+  });
+  if (!r.ok) throw new Error(`Could not save Gist (HTTP ${r.status})`);
+}
+
+async function gistCreate(pat) {
+  const r = await fetch('https://api.github.com/gists', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${pat}`, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      description: 'PotatoCheckIn data',
+      public: false,
+      files: { [GIST_FILE]: { content: JSON.stringify({ thomas: {}, kastri: {} }, null, 2) } }
+    })
+  });
+  if (!r.ok) throw new Error(`Could not create Gist (HTTP ${r.status})`);
+  return (await r.json()).id;
+}
+
+async function gistVerify(pat, id) {
+  const r = await fetch(`https://api.github.com/gists/${id}`, {
+    headers: { Authorization: `Bearer ${pat}`, Accept: 'application/vnd.github+json' }
+  });
+  if (!r.ok) throw new Error(`Gist not accessible (HTTP ${r.status})`);
+  const json = await r.json();
+  const c = json.files[GIST_FILE]?.content;
+  if (!c) throw new Error('This Gist has no potatocheckin.json file');
+  return JSON.parse(c);
+}
+
+// Fetch remote + merge into local, then save
+async function mergeAndSave() {
+  const remote = await gistGet();
+  USERS.forEach(u => {
+    const rem = remote[u] || {};
+    Object.keys(rem).forEach(date => {
+      if (!appData[u][date]) {
+        appData[u][date] = rem[date];
+      } else {
+        const localStarts = new Set(appData[u][date].map(s => s.start));
+        rem[date].forEach(s => { if (!localStarts.has(s.start)) appData[u][date].push(s); });
+        appData[u][date].sort((a,b) => new Date(a.start) - new Date(b.start));
+      }
+    });
+  });
+  await gistPatch();
+}
+
+async function syncLoad() {
+  if (isSyncing) return;
+  isSyncing = true;
+  setSyncState('syncing');
+  try {
+    const remote = await gistGet();
+    USERS.forEach(u => { appData[u] = remote[u] || {}; });
+    setSyncState('ok');
+  } catch(e) {
+    setSyncState('error');
+    toast(e.message, true);
+  } finally { isSyncing = false; }
+}
+
+async function syncSave() {
+  if (isSyncing) return;
+  isSyncing = true;
+  setSyncState('syncing');
+  try {
+    await mergeAndSave();
+    setSyncState('ok');
+  } catch(e) {
+    setSyncState('error');
+    toast(e.message, true);
+  } finally { isSyncing = false; }
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Setup
+// ════════════════════════════════════════════════════════════════════
+document.getElementById('setupBtn').onclick = async () => {
+  const pat    = document.getElementById('patInput').value.trim();
+  const gistId = document.getElementById('gistIdInput').value.trim();
+  const errEl  = document.getElementById('setupError');
+  errEl.style.display = 'none';
+  if (!pat) { errEl.textContent = 'Please enter your GitHub PAT.'; errEl.style.display = 'block'; return; }
+
+  const btn = document.getElementById('setupBtn');
+  btn.textContent = 'Connecting…'; btn.disabled = true;
+
+  try {
+    let id = gistId, data;
+    if (id) {
+      data = await gistVerify(pat, id);
+    } else {
+      id   = await gistCreate(pat);
+      data = { thomas: {}, kastri: {} };
+    }
+    localStorage.setItem('pat', pat);
+    localStorage.setItem('gistId', id);
+    appData = data;
+    document.getElementById('setupOverlay').classList.add('hidden');
+    boot();
+  } catch(e) {
+    errEl.textContent = e.message; errEl.style.display = 'block';
+  } finally {
+    btn.textContent = 'Connect'; btn.disabled = false;
+  }
+};
+
+// ════════════════════════════════════════════════════════════════════
+//  Settings
+// ════════════════════════════════════════════════════════════════════
+document.getElementById('settingsBtn').onclick = () => {
+  document.getElementById('displayGistId').textContent = getGistId();
+  document.getElementById('settingsOverlay').classList.remove('hidden');
+};
+document.getElementById('closeSettingsBtn').onclick = () => {
+  document.getElementById('settingsOverlay').classList.add('hidden');
+};
+document.getElementById('disconnectBtn').onclick = () => {
+  if (!confirm('Disconnect from this Gist? Your data stays in the Gist.')) return;
+  localStorage.removeItem('pat'); localStorage.removeItem('gistId');
+  location.reload();
+};
+
+// ════════════════════════════════════════════════════════════════════
+//  View switching
+// ════════════════════════════════════════════════════════════════════
+function switchView(view) {
+  currentView = view;
+  document.getElementById('checkinView').classList.toggle('hidden', view !== 'checkin');
+  document.getElementById('dashboardView').classList.toggle('hidden', view !== 'dashboard');
+  document.getElementById('navCheckin').classList.toggle('active', view === 'checkin');
+  document.getElementById('navDashboard').classList.toggle('active', view === 'dashboard');
+  if (view === 'dashboard') renderDashboard();
+}
+
+function switchUser(user) {
+  currentUser = user;
+  document.getElementById('uBtnThomas').classList.toggle('active', user === 'thomas');
+  document.getElementById('uBtnKastri').classList.toggle('active', user === 'kastri');
+  renderCheckin();
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Check-in view
+// ════════════════════════════════════════════════════════════════════
+function renderCheckin() {
+  const today = localDateKey();
+  const open  = openSession(currentUser);
+  const total = dayTotalMins(currentUser, today);
+
+  const badge  = document.getElementById('statusBadge');
+  const timerEl = document.getElementById('timer');
+  const totalEl = document.getElementById('todayTotal');
+  const btnEl   = document.getElementById('mainBtn');
+
+  if (open) {
+    badge.className  = 'status-badge active';
+    document.getElementById('statusText').textContent = 'Checked in';
+    timerEl.className = 'timer active';
+    timerEl.textContent = fmtHHMMSS(open.start);
+    btnEl.textContent = 'Stop';
+    btnEl.className   = 'checkin-btn stop';
+  } else {
+    badge.className  = 'status-badge';
+    document.getElementById('statusText').textContent = 'Not checked in';
+    timerEl.className = 'timer';
+    timerEl.textContent = '00:00:00';
+    btnEl.textContent = 'Start';
+    btnEl.className   = 'checkin-btn start';
+  }
+
+  totalEl.textContent = `Today: ${minsToHM(total)}`;
+  renderSessions();
+}
+
+function renderSessions() {
+  const sessions = (appData[currentUser] || {})[localDateKey()] || [];
+  const el = document.getElementById('sessionsTable');
+  if (!sessions.length) { el.innerHTML = '<div class="empty-state">No sessions yet today</div>'; return; }
+
+  el.innerHTML = sessions.map((s, i) => {
+    const isLive = !s.end;
+    const dur    = isLive
+      ? minsToHM((Date.now() - new Date(s.start)) / 60000)
+      : minsToHM((new Date(s.end) - new Date(s.start)) / 60000);
+    return `
+      <div class="session-row">
+        <div class="session-num">${i + 1}</div>
+        <div class="session-times">
+          <span class="session-start">${fmtTime(new Date(s.start))}</span>
+          <span class="session-sep">→</span>
+          <span class="session-end ${isLive ? 'live' : ''}">${isLive ? 'Now' : fmtTime(new Date(s.end))}</span>
+        </div>
+        <div class="session-dur">${dur}</div>
+      </div>`;
+  }).join('');
+}
+
+function startTimer() {
+  clearInterval(timerInterval);
+  timerInterval = setInterval(() => {
+    const open = openSession(currentUser);
+    if (!open) { clearInterval(timerInterval); renderCheckin(); return; }
+    document.getElementById('timer').textContent = fmtHHMMSS(open.start);
+    const total = dayTotalMins(currentUser, localDateKey());
+    document.getElementById('todayTotal').textContent = `Today: ${minsToHM(total)}`;
+  }, 1000);
+}
+
+async function handleMainBtn() {
+  const today = localDateKey();
+  const open  = openSession(currentUser);
+  if (!appData[currentUser][today]) appData[currentUser][today] = [];
+
+  if (open) {
+    open.end = new Date().toISOString();
+    const dur = minsToHM((new Date(open.end) - new Date(open.start)) / 60000);
+    toast(`Stopped — session: ${dur}`);
+    clearInterval(timerInterval);
+  } else {
+    appData[currentUser][today].push({ start: new Date().toISOString(), end: null });
+    toast('Started — good work!');
+    startTimer();
+  }
+
+  renderCheckin();
+  syncSave();
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Dashboard
+// ════════════════════════════════════════════════════════════════════
+function renderDashboard() {
+  renderStats();
+  renderHeatmaps();
+  renderBarChart();
+  renderRecent();
+}
+
+function getStats(user) {
+  const now   = new Date();
+  const today = localDateKey();
+  let week = 0, month = 0, all = 0;
+
+  Object.keys(appData[user] || {}).forEach(k => {
+    const d = new Date(k + 'T12:00:00');
+    const mins = dayTotalMins(user, k);
+    const daysAgo = (now - d) / 86400000;
+    if (daysAgo < 7)  week  += mins;
+    if (d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()) month += mins;
+    all += mins;
+  });
+
+  // include open session in today stats
+  const open = openSession(user);
+  const todayMins = dayTotalMins(user, today);
+
+  return { today: todayMins, week, month, all };
+}
+
+function renderStats() {
+  const grid = document.getElementById('statsGrid');
+  grid.innerHTML = USERS.map(u => {
+    const s = getStats(u);
+    const name = u.charAt(0).toUpperCase() + u.slice(1);
+    return `
+      <div class="stat-card">
+        <div class="stat-card-header">
+          <span class="user-pill ${u}">${name}</span>
+        </div>
+        <div class="stats-row">
+          <div class="stat-item"><div class="stat-val">${minsToHM(s.today)}</div><div class="stat-lbl">Today</div></div>
+          <div class="stat-item"><div class="stat-val">${minsToHM(s.week)}</div><div class="stat-lbl">This&nbsp;Week</div></div>
+          <div class="stat-item"><div class="stat-val">${minsToHM(s.month)}</div><div class="stat-lbl">This&nbsp;Month</div></div>
+          <div class="stat-item"><div class="stat-val">${minsToHM(s.all)}</div><div class="stat-lbl">All&nbsp;Time</div></div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function renderHeatmaps() {
+  USERS.forEach(u => {
+    const el   = document.getElementById(u === 'thomas' ? 'heatmapThomas' : 'heatmapKastri');
+    const name = u.charAt(0).toUpperCase() + u.slice(1);
+    const color = u === 'kastri' ? 'var(--purple)' : 'var(--primary)';
+
+    // Build week columns for last 52 weeks
+    const today = new Date(); today.setHours(23,59,59,999);
+    const endDate = new Date(today);
+
+    // Start from Monday ~52 weeks ago
+    const startDate = new Date(today);
+    startDate.setDate(startDate.getDate() - 364);
+    const dow = startDate.getDay();
+    startDate.setDate(startDate.getDate() - (dow === 0 ? 6 : dow - 1));
+    startDate.setHours(0,0,0,0);
+
+    // Build week columns
+    const weeks = [];
+    const d = new Date(startDate);
+    let prevMonth = -1;
+    let weekCols = [];
+
+    while (d <= endDate) {
+      if (d.getDay() === 1 && weekCols.length) { // Monday: new week
+        weeks.push(weekCols);
+        weekCols = [];
+      } else if (d.getDay() !== 1 && weekCols.length === 0 && weeks.length === 0) {
+        // first partial week padding
+      }
+
+      const key    = localDateKey(d);
+      const now    = new Date();
+      const future = d > now;
+      const mins   = future ? 0 : dayTotalMins(u, key);
+      const hrs    = mins / 60;
+      const level  = future ? -1 : hrs === 0 ? 0 : hrs < 2 ? 1 : hrs < 4 ? 2 : hrs < 6 ? 3 : 4;
+      const tip    = future ? '' : `${d.toLocaleDateString('default',{weekday:'short',month:'short',day:'numeric',year:'numeric'})}: ${minsToHM(mins)}`;
+      weekCols.push({ level, tip, month: d.getMonth(), isMon: d.getDay() === 1 });
+      d.setDate(d.getDate() + 1);
+    }
+    if (weekCols.length) weeks.push(weekCols);
+
+    // Month labels: one label per month above first week of that month
+    const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    let lastLabelMonth = -1;
+    const monthRow = weeks.map((wk, wi) => {
+      const firstCell = wk[0];
+      if (firstCell && firstCell.month !== lastLabelMonth) {
+        lastLabelMonth = firstCell.month;
+        const span = 14; // px per cell+gap
+        return `<div class="heatmap-month-label" style="width:${13}px">${monthNames[firstCell.month]}</div>`;
+      }
+      return `<div style="width:13px"></div>`;
+    }).join('');
+
+    const colsHtml = weeks.map(wk => {
+      const cells = [];
+      // fill Mon-Sun slots
+      let dayIdx = 0;
+      for (let row = 0; row < 7; row++) {
+        const cell = wk[dayIdx];
+        if (cell) {
+          const cls = cell.level === -1 ? 'hm-cell future' : 'hm-cell';
+          const lvl = cell.level >= 0 ? ` data-l="${cell.level}"` : '';
+          cells.push(`<div class="${cls}"${lvl} title="${cell.tip}"></div>`);
+          dayIdx++;
+        } else {
+          cells.push(`<div class="hm-cell" style="opacity:0"></div>`);
+        }
+      }
+      return `<div class="heatmap-col">${cells.join('')}</div>`;
+    }).join('');
+
+    el.innerHTML = `
+      <div class="heatmap-card">
+        <div class="heatmap-title">
+          <span class="user-pill ${u}">${name}</span>
+          Activity &mdash; last 52 weeks
+        </div>
+        <div class="heatmap-scroll">
+          <div class="heatmap-inner">
+            <div class="heatmap-months">${monthRow}</div>
+            <div class="heatmap-body">${colsHtml}</div>
+          </div>
+        </div>
+        <div class="heatmap-footer">
+          Less&nbsp;
+          <em class="hm-leg" style="background:var(--h0)"></em>
+          <em class="hm-leg" style="background:var(--h1)"></em>
+          <em class="hm-leg" style="background:var(--h2)"></em>
+          <em class="hm-leg" style="background:var(--h3)"></em>
+          <em class="hm-leg" style="background:var(--h4)"></em>
+          &nbsp;More &nbsp;&bull;&nbsp; <2h &bull; 2-4h &bull; 4-6h &bull; 6h+
+        </div>
+      </div>`;
+  });
+}
+
+function renderBarChart() {
+  const chart = document.getElementById('barChart');
+  const today = new Date();
+  const days = [];
+  for (let i = 13; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    days.push({ key: localDateKey(d), date: d });
+  }
+
+  let maxHrs = 0.5;
+  days.forEach(({ key }) => USERS.forEach(u => {
+    const h = dayTotalMins(u, key) / 60;
+    if (h > maxHrs) maxHrs = h;
+  }));
+
+  chart.innerHTML = days.map(({ key, date }) => {
+    const wd  = date.toLocaleDateString('default', { weekday:'short' })[0];
+    const lbl = `${wd}${date.getDate()}`;
+    const bars = USERS.map(u => {
+      const h   = dayTotalMins(u, key) / 60;
+      const pct = Math.round((h / maxHrs) * 100);
+      const tip = `${u.charAt(0).toUpperCase()+u.slice(1)}: ${minsToHM(h*60)}`;
+      return `<div class="bar ${u}" style="height:${pct}%" title="${tip}"></div>`;
+    }).join('');
+    return `<div class="bar-group"><div class="bars">${bars}</div><div class="bar-lbl">${lbl}</div></div>`;
+  }).join('');
+}
+
+function renderRecent() {
+  const el  = document.getElementById('recentTable');
+  const all = [];
+  USERS.forEach(u => {
+    Object.entries(appData[u] || {}).forEach(([date, sessions]) => {
+      sessions.forEach(s => all.push({ user: u, date, ...s }));
+    });
+  });
+  all.sort((a,b) => new Date(b.start) - new Date(a.start));
+  const rows = all.slice(0, 20);
+
+  if (!rows.length) { el.innerHTML = '<div class="empty-state">No check-ins recorded yet</div>'; return; }
+
+  el.innerHTML = rows.map(s => {
+    const start = new Date(s.start);
+    const dur   = s.end
+      ? minsToHM((new Date(s.end) - start) / 60000)
+      : minsToHM((Date.now() - start) / 60000) + ' (live)';
+    const endStr = s.end ? fmtTime(new Date(s.end)) : 'now';
+    const name  = s.user.charAt(0).toUpperCase() + s.user.slice(1);
+    return `
+      <div class="recent-row">
+        <div class="rec-user ${s.user}">${name}</div>
+        <div class="rec-date">${fmtDate(start)}</div>
+        <div class="rec-time">${fmtTime(start)} → ${endStr}</div>
+        <div class="rec-dur">${dur}</div>
+      </div>`;
+  }).join('');
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Boot
+// ════════════════════════════════════════════════════════════════════
+async function boot() {
+  await syncLoad();
+  renderCheckin();
+  const open = openSession(currentUser);
+  if (open) startTimer();
+
+  // Auto-refresh every 30 s
+  setInterval(async () => {
+    if (isSyncing) return;
+    await syncLoad();
+    if (currentView === 'checkin')   renderCheckin();
+    else                             renderDashboard();
+  }, 30000);
+}
+
+if (getPat() && getGistId()) {
+  document.getElementById('setupOverlay').classList.add('hidden');
+  boot();
+}
+</script>
+</body>
+</html>
